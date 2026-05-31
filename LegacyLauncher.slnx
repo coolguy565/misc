@@ -1,0 +1,9 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="LegacyLauncher.csproj" Id="9c51b9cc-d26f-4571-b04c-4f5172c83e28">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
+</Solution>
