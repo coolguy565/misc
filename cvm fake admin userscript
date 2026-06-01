@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         CollabVM UI Overlay (Stable + Audio-safe)
+// @name         CollabVM UI Overlay (Smart Username)
 // @namespace    http://tampermonkey.net/
-// @version      2.2
-// @description  Stable UI mods for CollabVM (normal + audio branch)
+// @version      2.5
+// @description  CollabVM overlay with auto username detection + hotkey
 // @match        *://computernewb.com/collab-vm/*
 // @match        *://computernewb.com/~dark/cvm12-audio/*
 // @grant        none
@@ -11,7 +11,62 @@
 (function () {
     'use strict';
 
-    const TARGET_NAME = "NixCD▸";
+    const STORAGE_KEY = "cvm_username";
+
+    // -------------------------
+    // GET USERNAME (smart priority chain)
+    // -------------------------
+    function resolveUsername(forcePrompt = false) {
+        let name = null;
+
+        // 1. Try DOM account name
+        const domName = document.querySelector("#accountDropdownUsername");
+        if (domName && domName.textContent.trim()) {
+            name = domName.textContent.trim();
+            console.log("[CVM] username from DOM:", name);
+        }
+
+        // 2. Try localStorage
+        if (!name) {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                name = stored;
+                console.log("[CVM] username from storage:", name);
+            }
+        }
+
+        // 3. Prompt fallback
+        if (!name || forcePrompt) {
+            name = prompt("Enter your CollabVM username:");
+            if (!name) name = "user";
+
+            console.log("[CVM] username from prompt:", name);
+        }
+
+        localStorage.setItem(STORAGE_KEY, name);
+
+        return name + "▸";
+    }
+
+    let TARGET_NAME = null;
+
+    function initUsername() {
+        TARGET_NAME = resolveUsername();
+        console.log("[CVM] active username:", TARGET_NAME);
+    }
+
+    // -------------------------
+    // HOTKEY (Ctrl+Shift+U)
+    // -------------------------
+    document.addEventListener("keydown", (e) => {
+        if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "u") {
+            e.preventDefault();
+
+            TARGET_NAME = resolveUsername(true);
+
+            console.log("[CVM] username updated via hotkey");
+        }
+    });
 
     const $ = (q, r = document) => r.querySelector(q);
     const $$ = (q, r = document) => [...r.querySelectorAll(q)];
@@ -23,7 +78,7 @@
     }
 
     // -------------------------
-    // USER LIST PATCH
+    // PATCH USERS
     // -------------------------
     function patchUsers() {
         $$(".username-registered").forEach(el => {
@@ -37,7 +92,7 @@
     }
 
     // -------------------------
-    // STAFF UI PATCH
+    // PATCH STAFF UI
     // -------------------------
     function patchStaff() {
         const staff = $("#staffbtns");
@@ -56,9 +111,11 @@
     }
 
     // -------------------------
-    // CHAT PATCH (IMPORTANT FIX)
+    // PATCH CHAT
     // -------------------------
     function patchChat(root = document) {
+        if (!TARGET_NAME) return;
+
         $$(".chat-username-registered", root).forEach(el => {
             if (el.textContent.trim() === TARGET_NAME) {
                 el.classList.replace(
@@ -70,40 +127,20 @@
     }
 
     // -------------------------
-    // INITIAL STARTUP CHECK
-    // -------------------------
-    function startWhenReady() {
-        const timer = setInterval(() => {
-            if ($("#userlist") || $("#chatList") || $("#staffbtns")) {
-                clearInterval(timer);
-
-                console.log("[CVM] UI detected, starting overlay");
-
-                init();
-            }
-        }, 300);
-    }
-
-    // -------------------------
-    // MAIN INIT
+    // INIT
     // -------------------------
     function init() {
+        initUsername();
 
-        // initial full sweep
         patchUsers();
         patchStaff();
         patchChat();
 
-        // -------------------------
-        // BODY OBSERVER (FIX FOR LATE MESSAGES)
-        // -------------------------
         const observer = new MutationObserver(mutations => {
             for (const m of mutations) {
-                for (const node of m.addedNodes) {
-                    if (node.nodeType === 1) {
-                        patchChat(node);
-                    }
-                }
+                m.addedNodes.forEach(node => {
+                    if (node.nodeType === 1) patchChat(node);
+                });
             }
         });
 
@@ -112,11 +149,6 @@
             subtree: true
         });
 
-        console.log("[CVM] Chat observer attached");
-
-        // -------------------------
-        // SAFETY LOOP (handles redraws / audio branch)
-        // -------------------------
         setInterval(() => {
             patchUsers();
             patchStaff();
@@ -126,6 +158,11 @@
         console.log("[CVM] overlay active");
     }
 
-    startWhenReady();
+    const wait = setInterval(() => {
+        if ($("#chatList") || $("#userlist") || $("#staffbtns")) {
+            clearInterval(wait);
+            init();
+        }
+    }, 300);
 
 })();
