@@ -1,0 +1,131 @@
+// ==UserScript==
+// @name         CollabVM UI Overlay (Stable + Audio-safe)
+// @namespace    http://tampermonkey.net/
+// @version      2.2
+// @description  Stable UI mods for CollabVM (normal + audio branch)
+// @match        *://computernewb.com/collab-vm/*
+// @match        *://computernewb.com/~dark/cvm12-audio/*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    const TARGET_NAME = "NixCD▸";
+
+    const $ = (q, r = document) => r.querySelector(q);
+    const $$ = (q, r = document) => [...r.querySelectorAll(q)];
+
+    function forceVisible(el, mode = "block") {
+        if (!el) return;
+        el.style.setProperty("display", mode, "important");
+        el.hidden = false;
+    }
+
+    // -------------------------
+    // USER LIST PATCH
+    // -------------------------
+    function patchUsers() {
+        $$(".username-registered").forEach(el => {
+            el.classList.replace("username-registered", "username-admin");
+        });
+
+        const current = $("#userlist > tr.user-registered.user-current");
+        if (current) {
+            current.classList.replace("user-registered", "user-admin");
+        }
+    }
+
+    // -------------------------
+    // STAFF UI PATCH
+    // -------------------------
+    function patchStaff() {
+        const staff = $("#staffbtns");
+
+        if (staff) {
+            forceVisible(staff, "block");
+
+            $$("button", staff).forEach(btn => {
+                forceVisible(btn, "inline-block");
+                btn.disabled = false;
+            });
+        }
+
+        const xss = $("#xssCheckboxContainer");
+        if (xss) forceVisible(xss, "block");
+    }
+
+    // -------------------------
+    // CHAT PATCH (IMPORTANT FIX)
+    // -------------------------
+    function patchChat(root = document) {
+        $$(".chat-username-registered", root).forEach(el => {
+            if (el.textContent.trim() === TARGET_NAME) {
+                el.classList.replace(
+                    "chat-username-registered",
+                    "chat-username-admin"
+                );
+            }
+        });
+    }
+
+    // -------------------------
+    // INITIAL STARTUP CHECK
+    // -------------------------
+    function startWhenReady() {
+        const timer = setInterval(() => {
+            if ($("#userlist") || $("#chatList") || $("#staffbtns")) {
+                clearInterval(timer);
+
+                console.log("[CVM] UI detected, starting overlay");
+
+                init();
+            }
+        }, 300);
+    }
+
+    // -------------------------
+    // MAIN INIT
+    // -------------------------
+    function init() {
+
+        // initial full sweep
+        patchUsers();
+        patchStaff();
+        patchChat();
+
+        // -------------------------
+        // BODY OBSERVER (FIX FOR LATE MESSAGES)
+        // -------------------------
+        const observer = new MutationObserver(mutations => {
+            for (const m of mutations) {
+                for (const node of m.addedNodes) {
+                    if (node.nodeType === 1) {
+                        patchChat(node);
+                    }
+                }
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+
+        console.log("[CVM] Chat observer attached");
+
+        // -------------------------
+        // SAFETY LOOP (handles redraws / audio branch)
+        // -------------------------
+        setInterval(() => {
+            patchUsers();
+            patchStaff();
+            patchChat();
+        }, 1000);
+
+        console.log("[CVM] overlay active");
+    }
+
+    startWhenReady();
+
+})();
